@@ -1,0 +1,864 @@
+---------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  G:\My Drive\ky attainment\KY Attainment Log.log
+  log type:  text
+ opened on:   7 Jan 2025, 16:55:27
+
+. 
+. // Load ACS Microdata
+. use "`attain'ky_attainment_data.dta"
+
+. 
+. /*
+>     - This analysis examines the impact of Kentucky's 60x30 statewide attainment goal, implemented in 2016, on asso
+> ciate's degree or higher attainment using a Difference-in-Differences (DiD) framework.
+>         - Outcome variable: Percentage of the population aged 25 to 64 years old with an associate's degree or high
+> er.
+>     - Kentucky is the treatment group, and states with no statewide attainment goals are the control group.
+>     - Analysis includes:
+>       - Descriptive statistics and simple DiD estimates.
+>       - Multiple regression specifications with covariates and fixed effects.
+>       - Subsample analysis and sensitivity tests.
+> */
+. 
+. // Step 1: Descriptive Analysis for Treatment and Control Groups
+. 
+. // Treatment group pre-policy
+. summ adhigher if statefip == 21 & year <= 2015 [fweight=perwt]
+
+    Variable |        Obs        Mean    Std. dev.       Min        Max
+-------------+---------------------------------------------------------
+    adhigher | 13,935,147    .3189687    .4660769          0          1
+
+. gen treat_pre_ad = r(mean)
+
+. 
+. // Treatment group post-policy
+. summ adhigher if statefip == 21 & year >= 2016 [fweight=perwt]
+
+    Variable |        Obs        Mean    Std. dev.       Min        Max
+-------------+---------------------------------------------------------
+    adhigher |  9,220,504    .3534065    .4780276          0          1
+
+. gen treat_post_ad = r(mean)
+
+. 
+. // Difference in treatment group pre and post-policy
+. gen treat_postpre_ad = treat_post_ad - treat_pre_ad
+
+. noi disp treat_postpre_ad[1]
+.03443778
+
+. 
+. // Control group pre-policy
+. summ adhigher if statefip != 21 & year <= 2015 [fweight=perwt]
+
+    Variable |        Obs        Mean    Std. dev.       Min        Max
+-------------+---------------------------------------------------------
+    adhigher |240,117,564     .404638    .4908218          0          1
+
+. gen cont_pre_ad = r(mean)
+
+. 
+. // Control group post-policy
+. summ adhigher if statefip != 21 & year >= 2016 [fweight=perwt]
+
+    Variable |        Obs        Mean    Std. dev.       Min        Max
+-------------+---------------------------------------------------------
+    adhigher |162,688,948    .4336956    .4955842          0          1
+
+. gen cont_post_ad = r(mean)
+
+. 
+. // Difference in control group pre and post-policy
+. gen cont_postpre_ad = cont_post_ad - cont_pre_ad
+
+. noi disp cont_postpre_ad[1]
+.02905765
+
+. 
+. // Unadjusted Difference-in-Differences Estimate
+. gen did_unadj_ad = treat_postpre_ad - cont_postpre_ad
+
+. noi disp did_unadj_ad[1]  // Simple DiD Estimate
+.00538012
+
+. 
+. // Step 2: Simple Regression Estimates Without Covariates
+. gen stateKY = statefip == 21
+
+. gen postpolicy = year >= 2016
+
+. gen stateKYXpostpolicy = stateKY * postpolicy
+
+. 
+. reg adhigher i.stateKY##i.postpolicy [fweight=perwt]
+
+      Source |       SS           df       MS      Number of obs   = 425962163
+-------------+----------------------------------   F(3, 425962159) >  99999.00
+       Model |  241840.725         3  80613.5749   Prob > F        =    0.0000
+    Residual |   102936874 425962159   .24165732   R-squared       =    0.0023
+-------------+----------------------------------   Adj R-squared   =    0.0023
+       Total |   103178714 425962162   .24222507   Root MSE        =    .49159
+
+------------------------------------------------------------------------------------
+          adhigher | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+         1.stateKY |  -.0856692   .0001355  -632.46   0.000    -.0859347   -.0854038
+      1.postpolicy |   .0290576   .0000499   582.11   0.000     .0289598    .0291555
+                   |
+stateKY#postpolicy |
+              1 1  |   .0053801   .0002146    25.07   0.000     .0049596    .0058007
+                   |
+             _cons |    .404638   .0000317  1.3e+04   0.000     .4045758    .4047001
+------------------------------------------------------------------------------------
+
+. // Interpretation: The coefficient for the interaction term (stateKY#postpolicy) equals the simple DiD estimate (~0
+> .0054 or 0.54%).
+. 
+. // Step 3: Visualizing Treatment and Control Group Trends
+. label variable adhigher "Associate Degree or Higher"
+
+. 
+. bysort year: egen adhigher_control = mean(adhigher) if statefip != 21
+(231,901 missing values generated)
+
+. bysort year: egen adhigher_treat = mean(adhigher) if statefip == 21
+(3,888,763 missing values generated)
+
+. 
+. twoway (line adhigher_treat year, xline(2016)) (line adhigher_control year), ///
+>     ytitle("Associate Degree and Higher") ///
+>     legend(order(1 "Kentucky" 2 "Control Group")) ///
+>     note("Source: IPUMS USA - University of Minnesota - www.ipums.org", size(small)) ///
+>     title("Figure 7", size(medium))
+
+. // A copy of this graph will be added to GitHub
+. 
+. // Step 4: Regression Estimates With Covariates
+. 
+. reg adhigher i.stateKY##i.postpolicy black asian hispanic otherrace female metrodummy ftotinc age [fweight=perwt]
+
+      Source |       SS           df       MS      Number of obs   = 394104463
+-------------+----------------------------------   F(11,394104451) >  99999.00
+       Model |  15808888.8        11  1437171.71   Prob > F        =    0.0000
+    Residual |  80363557.4 394104451  .203914361   R-squared       =    0.1644
+-------------+----------------------------------   Adj R-squared   =    0.1644
+       Total |  96172446.2 394104462  .244027804   Root MSE        =    .45157
+
+------------------------------------------------------------------------------------
+          adhigher | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-------------------+----------------------------------------------------------------
+         1.stateKY |  -.0559143   .0001546  -361.64   0.000    -.0562173   -.0556112
+      1.postpolicy |   .0082527   .0000475   173.62   0.000     .0081595    .0083458
+                   |
+stateKY#postpolicy |
+              1 1  |   .0099492   .0002406    41.34   0.000     .0094776    .0104209
+                   |
+             black |  -.1301983   .0000771 -1688.84   0.000    -.1303494   -.1300472
+             asian |   .0684897   .0000756   906.01   0.000     .0683415    .0686378
+          hispanic |   -.256494   .0000641 -3999.09   0.000    -.2566197   -.2563683
+         otherrace |  -.0498794   .0000797  -625.58   0.000    -.0500357   -.0497232
+            female |   .0554781   .0000455  1218.18   0.000     .0553889    .0555674
+        metrodummy |   .1260605   .0000848  1486.58   0.000     .1258943    .1262267
+           ftotinc |   1.27e-06   2.33e-10  5467.73   0.000     1.27e-06    1.27e-06
+               age |   -.003918   2.00e-06 -1957.69   0.000    -.0039219    -.003914
+             _cons |   .4052539    .000126  3216.20   0.000     .4050069    .4055009
+------------------------------------------------------------------------------------
+
+. // Interpretation: The DiD coefficient increases to ~0.00995 (~1%) and is statistically significant (t-score = 41.3
+> 4).
+. 
+. // Step 5: Main Specification Regression with Fixed Effects and Demographic Interaction Terms
+. 
+. reg adhigher i.stateKY##i.postpolicy black asian hispanic otherrace female metrodummy ftotinc age ///
+>     i.stateKY##i.postpolicy##i.black i.stateKY##i.postpolicy##i.asian i.stateKY##i.postpolicy##i.hispanic ///
+>     i.stateKY##i.postpolicy##i.otherrace i.year i.statefip [fweight=perwt]
+note: 1.black omitted because of collinearity.
+note: 1.asian omitted because of collinearity.
+note: 1.hispanic omitted because of collinearity.
+note: 1.otherrace omitted because of collinearity.
+note: 2019.year omitted because of collinearity.
+note: 21.statefip omitted because of collinearity.
+
+      Source |       SS           df       MS      Number of obs   = 394104463
+-------------+----------------------------------   F(37,394104425) >  99999.00
+       Model |  16084728.9        37  434722.403   Prob > F        =    0.0000
+    Residual |  80087717.3 394104425  .203214458   R-squared       =    0.1672
+-------------+----------------------------------   Adj R-squared   =    0.1672
+       Total |  96172446.2 394104462  .244027804   Root MSE        =    .45079
+
+----------------------------------------------------------------------------------------------
+                    adhigher | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-----------------------------+----------------------------------------------------------------
+                   1.stateKY |  -.0762387   .0001718  -443.65   0.000    -.0765755   -.0759019
+                1.postpolicy |   .0159011   .0001119   142.05   0.000     .0156817    .0161205
+                             |
+          stateKY#postpolicy |
+                        1 1  |   .0123827   .0002636    46.98   0.000     .0118662    .0128993
+                             |
+                       black |  -.1375986   .0001021 -1347.80   0.000    -.1377987   -.1373985
+                       asian |   .0626843   .0001003   625.07   0.000     .0624878    .0628809
+                    hispanic |  -.2663279   .0000851 -3129.82   0.000    -.2664947   -.2661611
+                   otherrace |  -.0524998   .0001057  -496.62   0.000     -.052707   -.0522926
+                      female |   .0553827   .0000455  1218.11   0.000     .0552935    .0554718
+                  metrodummy |   .1047106   .0000924  1132.63   0.000     .1045294    .1048918
+                     ftotinc |   1.25e-06   2.34e-10  5353.54   0.000     1.25e-06    1.25e-06
+                         age |  -.0038936   2.00e-06 -1948.28   0.000    -.0038976   -.0038897
+                     1.black |          0  (omitted)
+                             |
+               stateKY#black |
+                        1 1  |   .0387121   .0005349    72.37   0.000     .0376637    .0397606
+                             |
+            postpolicy#black |
+                        1 1  |   .0059078   .0001582    37.36   0.000     .0055978    .0062178
+                             |
+    stateKY#postpolicy#black |
+                      1 1 1  |  -.0106386   .0008397   -12.67   0.000    -.0122843   -.0089928
+                             |
+                     1.asian |          0  (omitted)
+                             |
+               stateKY#asian |
+                        1 1  |   .1321226    .001156   114.29   0.000     .1298569    .1343883
+                             |
+            postpolicy#asian |
+                        1 1  |  -.0021051   .0001522   -13.83   0.000    -.0024034   -.0018068
+                             |
+    stateKY#postpolicy#asian |
+                      1 1 1  |  -.0547687   .0017181   -31.88   0.000    -.0581361   -.0514014
+                             |
+                  1.hispanic |          0  (omitted)
+                             |
+            stateKY#hispanic |
+                        1 1  |   .1330209   .0009485   140.25   0.000      .131162    .1348799
+                             |
+         postpolicy#hispanic |
+                        1 1  |   .0076449    .000128    59.71   0.000      .007394    .0078959
+                             |
+ stateKY#postpolicy#hispanic |
+                      1 1 1  |   -.000058   .0014118    -0.04   0.967    -.0028251    .0027092
+                             |
+                 1.otherrace |          0  (omitted)
+                             |
+           stateKY#otherrace |
+                        1 1  |   .0109453   .0011118     9.85   0.000     .0087663    .0131243
+                             |
+        postpolicy#otherrace |
+                        1 1  |   -.001445   .0001614    -8.95   0.000    -.0017614   -.0011287
+                             |
+stateKY#postpolicy#otherrace |
+                      1 1 1  |   .0061808   .0016849     3.67   0.000     .0028784    .0094832
+                             |
+                        year |
+                       2011  |   .0030823   .0001021    30.19   0.000     .0028822    .0032824
+                       2012  |   .0083465   .0001023    81.57   0.000      .008146    .0085471
+                       2013  |   .0072986   .0001022    71.42   0.000     .0070983    .0074989
+                       2014  |   .0106864    .000102   104.78   0.000     .0104865    .0108862
+                       2015  |   .0099645   .0001018    97.85   0.000     .0097649    .0101641
+                       2016  |   -.005902   .0001013   -58.25   0.000    -.0061006   -.0057034
+                       2017  |  -.0033717   .0001012   -33.33   0.000      -.00357   -.0031735
+                       2018  |   .0011432   .0001012    11.29   0.000     .0009448    .0013416
+                       2019  |          0  (omitted)
+                             |
+                    statefip |
+                   delaware  |  -.0442059   .0002093  -211.26   0.000     -.044616   -.0437958
+                   kentucky  |          0  (omitted)
+                   michigan  |   -.043298   .0000767  -564.81   0.000    -.0434483   -.0431478
+                mississippi  |  -.0244074   .0001467  -166.38   0.000    -.0246949   -.0241199
+                   nebraska  |   .0316747    .000175   181.00   0.000     .0313317    .0320177
+                   new york  |   .0316999    .000057   555.85   0.000     .0315881    .0318116
+              west virginia  |  -.1113061    .000204  -545.58   0.000     -.111706   -.1109063
+                             |
+                       _cons |   .4228698   .0001524  2773.97   0.000      .422571    .4231686
+----------------------------------------------------------------------------------------------
+
+. // Interpretation: The DiD estimate for the main specification of the model (~0.01238, t=46.98) suggests that the a
+> pplication of treatment has increased the probability that a person in Kentucky will have an associate degree or hi
+> gher by 1.24 percent compared to the control group of states.
+. 
+. // Step 6: Subsample Analysis
+. // Estimate main specification for specific age cohorts. 
+. // Here, we show results for the 35-39 age cohort, which had the largest effect size.
+. preserve
+
+. keep if age >= 35 & age <= 39
+(3,650,910 observations deleted)
+
+. reg adhigher i.stateKY##i.postpolicy black asian hispanic otherrace female metrodummy ftotinc age ///
+>     i.stateKY##i.postpolicy##i.black i.stateKY##i.postpolicy##i.asian i.stateKY##i.postpolicy##i.hispanic ///
+>     i.stateKY##i.postpolicy##i.otherrace i.year i.statefip [fweight=perwt]
+note: 1.black omitted because of collinearity.
+note: 1.asian omitted because of collinearity.
+note: 1.hispanic omitted because of collinearity.
+note: 1.otherrace omitted because of collinearity.
+note: 2019.year omitted because of collinearity.
+note: 21.statefip omitted because of collinearity.
+
+      Source |       SS           df       MS      Number of obs   =  48649589
+-------------+----------------------------------   F(37, 48649551) >  99999.00
+       Model |  2506038.04        37  67730.7579   Prob > F        =    0.0000
+    Residual |  9538926.78  48649551  .196074303   R-squared       =    0.2081
+-------------+----------------------------------   Adj R-squared   =    0.2081
+       Total |  12044964.8  48649588  .247586163   Root MSE        =     .4428
+
+----------------------------------------------------------------------------------------------
+                    adhigher | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-----------------------------+----------------------------------------------------------------
+                   1.stateKY |  -.0724612   .0004993  -145.14   0.000    -.0734397   -.0714826
+                1.postpolicy |   .0216541    .000316    68.54   0.000     .0210349    .0222734
+                             |
+          stateKY#postpolicy |
+                        1 1  |   .0296017   .0007549    39.21   0.000     .0281221    .0310813
+                             |
+                       black |  -.1488818   .0002915  -510.79   0.000    -.1494531   -.1483106
+                       asian |   .0995064   .0002726   364.96   0.000     .0989721    .1000408
+                    hispanic |  -.2782133   .0002268 -1226.67   0.000    -.2786578   -.2777687
+                   otherrace |  -.0511699   .0002721  -188.04   0.000    -.0517033   -.0506366
+                      female |   .0717295   .0001271   564.39   0.000     .0714804    .0719786
+                  metrodummy |   .1136153   .0002713   418.73   0.000     .1130835    .1141471
+                     ftotinc |   1.36e-06   6.63e-10  2046.11   0.000     1.36e-06    1.36e-06
+                         age |  -.0038147   .0000447   -85.41   0.000    -.0039022   -.0037272
+                     1.black |          0  (omitted)
+                             |
+               stateKY#black |
+                        1 1  |    .032552   .0015066    21.61   0.000     .0295991    .0355048
+                             |
+            postpolicy#black |
+                        1 1  |   .0241671   .0004478    53.97   0.000     .0232894    .0250447
+                             |
+    stateKY#postpolicy#black |
+                      1 1 1  |   -.041069   .0023446   -17.52   0.000    -.0456643   -.0364737
+                             |
+                     1.asian |          0  (omitted)
+                             |
+               stateKY#asian |
+                        1 1  |   .0559741    .002767    20.23   0.000      .050551    .0613973
+                             |
+            postpolicy#asian |
+                        1 1  |  -.0218378   .0004136   -52.80   0.000    -.0226484   -.0210271
+                             |
+    stateKY#postpolicy#asian |
+                      1 1 1  |   .0184371   .0042545     4.33   0.000     .0100985    .0267758
+                             |
+                  1.hispanic |          0  (omitted)
+                             |
+            stateKY#hispanic |
+                        1 1  |   .1122041   .0022217    50.50   0.000     .1078497    .1165586
+                             |
+         postpolicy#hispanic |
+                        1 1  |   .0119202   .0003401    35.05   0.000     .0112537    .0125867
+                             |
+ stateKY#postpolicy#hispanic |
+                      1 1 1  |  -.0025564   .0035175    -0.73   0.467    -.0094507    .0043379
+                             |
+                 1.otherrace |          0  (omitted)
+                             |
+           stateKY#otherrace |
+                        1 1  |   .0228086   .0028655     7.96   0.000     .0171923    .0284248
+                             |
+        postpolicy#otherrace |
+                        1 1  |    .002711   .0004189     6.47   0.000     .0018899     .003532
+                             |
+stateKY#postpolicy#otherrace |
+                      1 1 1  |   -.036065    .004319    -8.35   0.000      -.04453      -.0276
+                             |
+                        year |
+                       2011  |   .0054532   .0002856    19.09   0.000     .0048934    .0060129
+                       2012  |   .0163154   .0002868    56.88   0.000     .0157532    .0168776
+                       2013  |   .0139407   .0002865    48.65   0.000     .0133791    .0145023
+                       2014  |   .0138481   .0002858    48.45   0.000     .0132879    .0144082
+                       2015  |    .022301   .0002853    78.18   0.000     .0217419    .0228601
+                       2016  |  -.0050413   .0002815   -17.91   0.000    -.0055931   -.0044896
+                       2017  |   -.001846   .0002796    -6.60   0.000    -.0023941   -.0012979
+                       2018  |   .0039194   .0002792    14.04   0.000     .0033722    .0044666
+                       2019  |          0  (omitted)
+                             |
+                    statefip |
+                   delaware  |   -.063272    .000607  -104.23   0.000    -.0644618   -.0620822
+                   kentucky  |          0  (omitted)
+                   michigan  |  -.0345755   .0002214  -156.16   0.000    -.0350095   -.0341416
+                mississippi  |   -.009682   .0004086   -23.70   0.000    -.0104828   -.0088811
+                   nebraska  |   .0467098   .0004831    96.69   0.000     .0457629    .0476566
+                   new york  |   .0390222   .0001603   243.40   0.000      .038708    .0393365
+              west virginia  |   -.103511   .0005956  -173.81   0.000    -.1046783   -.1023438
+                             |
+                       _cons |   .3953457   .0016903   233.90   0.000     .3920329    .3986585
+----------------------------------------------------------------------------------------------
+
+. restore
+
+. // Interpretation: For the 35-39 age cohort, the DiD estimate is ~0.0296 (~3%), the largest observed effect across 
+> all age cohorts (t = 39.21).
+. 
+. // Step 7: Sensitivity Tests
+. 
+. // Test Parallel Trends Assumption with Interaction Terms 
+. // We test the core DiD assumption of pre-treatment parallel trends statistically by including interaction terms fo
+> r stateKY and year indicator variables in the model.
+. 
+. reg adhigher black asian hispanic otherrace female metrodummy ftotinc age ///
+>     i.stateKY##i.y2010 i.stateKY##i.y2011 i.stateKY##i.y2012 i.stateKY##i.y2013 i.stateKY##i.y2014 i.stateKY##i.y20
+> 15 ///
+>     i.stateKY##i.y2017 i.stateKY##i.y2018 i.stateKY##i.y2019 i.stateKY##i.postpolicy##i.black ///
+>     i.stateKY##i.postpolicy##i.asian i.stateKY##i.postpolicy##i.hispanic i.stateKY##i.postpolicy##i.otherrace [fwei
+> ght=perwt]
+note: 1.postpolicy omitted because of collinearity.
+note: 1.stateKY#1.postpolicy omitted because of collinearity.
+note: 1.black omitted because of collinearity.
+note: 1.asian omitted because of collinearity.
+note: 1.hispanic omitted because of collinearity.
+note: 1.otherrace omitted because of collinearity.
+
+      Source |       SS           df       MS      Number of obs   = 394104463
+-------------+----------------------------------   F(39,394104423) >  99999.00
+       Model |  15824318.5        39  405751.756   Prob > F        =    0.0000
+    Residual |  80348127.8 394104423  .203875225   R-squared       =    0.1645
+-------------+----------------------------------   Adj R-squared   =    0.1645
+       Total |  96172446.2 394104462  .244027804   Root MSE        =    .45153
+
+----------------------------------------------------------------------------------------------
+                    adhigher | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-----------------------------+----------------------------------------------------------------
+                       black |   -.134106   .0001011 -1326.87   0.000    -.1343041   -.1339079
+                       asian |    .068215   .0000993   687.30   0.000     .0680205    .0684095
+                    hispanic |  -.2610526   .0000834 -3128.81   0.000    -.2612161   -.2608891
+                   otherrace |  -.0492409   .0001058  -465.29   0.000    -.0494483   -.0490335
+                      female |   .0555168   .0000455  1219.13   0.000     .0554276    .0556061
+                  metrodummy |   .1249981   .0000851  1468.87   0.000     .1248313    .1251649
+                     ftotinc |   1.27e-06   2.33e-10  5455.45   0.000     1.27e-06    1.27e-06
+                         age |  -.0039176   2.00e-06 -1957.42   0.000    -.0039215   -.0039136
+                   1.stateKY |  -.0530105   .0003835  -138.22   0.000    -.0537622   -.0522589
+                     1.y2010 |  -.0075299   .0001129   -66.67   0.000    -.0077512   -.0073085
+                             |
+               stateKY#y2010 |
+                        1 1  |  -.0139846   .0005335   -26.21   0.000    -.0150303   -.0129389
+                             |
+                     1.y2011 |  -.0044037   .0001128   -39.04   0.000    -.0046248   -.0041826
+                             |
+               stateKY#y2011 |
+                        1 1  |  -.0154526   .0005333   -28.98   0.000    -.0164978   -.0144073
+                             |
+                     1.y2012 |  -.0006417    .000113    -5.68   0.000    -.0008632   -.0004201
+                             |
+               stateKY#y2012 |
+                        1 1  |  -.0201929    .000538   -37.54   0.000    -.0212473   -.0191386
+                             |
+                     1.y2013 |  -.0023424   .0001129   -20.74   0.000    -.0025637    -.002121
+                             |
+               stateKY#y2013 |
+                        1 1  |  -.0054255   .0005384   -10.08   0.000    -.0064807   -.0043704
+                             |
+                     1.y2014 |    .001248   .0001128    11.06   0.000     .0010269    .0014691
+                             |
+               stateKY#y2014 |
+                        1 1  |   -.011799   .0005392   -21.88   0.000    -.0128559   -.0107421
+                             |
+                     1.y2015 |   .0002673   .0001128     2.37   0.018     .0000463    .0004883
+                             |
+               stateKY#y2015 |
+                        1 1  |  -.0076805   .0005384   -14.27   0.000    -.0087358   -.0066253
+                             |
+                     1.y2017 |   .0028489   .0001032    27.62   0.000     .0026467    .0030511
+                             |
+               stateKY#y2017 |
+                        1 1  |  -.0120065   .0005279   -22.74   0.000    -.0130412   -.0109719
+                             |
+                     1.y2018 |   .0065723   .0001033    63.63   0.000     .0063699    .0067748
+                             |
+               stateKY#y2018 |
+                        1 1  |   .0034627   .0005284     6.55   0.000      .002427    .0044985
+                             |
+                     1.y2019 |   .0050866   .0001035    49.15   0.000     .0048838    .0052894
+                             |
+               stateKY#y2019 |
+                        1 1  |   .0073511     .00053    13.87   0.000     .0063123    .0083899
+                             |
+                1.postpolicy |          0  (omitted)
+                             |
+          stateKY#postpolicy |
+                        1 1  |          0  (omitted)
+                             |
+                     1.black |          0  (omitted)
+                             |
+               stateKY#black |
+                        1 1  |    .029067   .0005356    54.27   0.000     .0280172    .0301168
+                             |
+            postpolicy#black |
+                        1 1  |   .0070597   .0001584    44.57   0.000     .0067492    .0073702
+                             |
+    stateKY#postpolicy#black |
+                      1 1 1  |  -.0114459   .0008411   -13.61   0.000    -.0130944   -.0097974
+                             |
+                     1.asian |          0  (omitted)
+                             |
+               stateKY#asian |
+                        1 1  |   .1192606   .0011578   103.01   0.000     .1169914    .1215298
+                             |
+            postpolicy#asian |
+                        1 1  |  -.0016342   .0001524   -10.72   0.000    -.0019329   -.0013354
+                             |
+    stateKY#postpolicy#asian |
+                      1 1 1  |  -.0549895    .001721   -31.95   0.000    -.0583626   -.0516164
+                             |
+                  1.hispanic |          0  (omitted)
+                             |
+            stateKY#hispanic |
+                        1 1  |   .1230535   .0009498   129.56   0.000      .121192    .1249151
+                             |
+         postpolicy#hispanic |
+                        1 1  |   .0083703   .0001282    65.27   0.000      .008119    .0086216
+                             |
+ stateKY#postpolicy#hispanic |
+                      1 1 1  |  -.0010758   .0014142    -0.76   0.447    -.0038476     .001696
+                             |
+                 1.otherrace |          0  (omitted)
+                             |
+           stateKY#otherrace |
+                        1 1  |   .0053471   .0011136     4.80   0.000     .0031645    .0075298
+                             |
+        postpolicy#otherrace |
+                        1 1  |  -.0015543   .0001617    -9.61   0.000    -.0018711   -.0012374
+                             |
+stateKY#postpolicy#otherrace |
+                      1 1 1  |   .0072239   .0016879     4.28   0.000     .0039157    .0105321
+                             |
+                       _cons |   .4099779    .000146  2807.33   0.000     .4096917    .4102642
+----------------------------------------------------------------------------------------------
+
+. // Interpretation: Statistically significant coefficients for pre-treatment interaction terms suggest possible viol
+> ations of the parallel trends assumption.
+. 
+. // Excluding California and New York from the Control Group
+. // New York and California are states with large populations and demographic characteristics that differ from Kentu
+> cky. Removing them tests the robustness of the model.
+. 
+. preserve
+
+. drop if statefip == 06  // Remove California
+(1,969,718 observations deleted)
+
+. reg adhigher i.stateKY##i.postpolicy black asian hispanic otherrace female metrodummy ftotinc age ///
+>     i.stateKY##i.postpolicy##i.black i.stateKY##i.postpolicy##i.asian i.stateKY##i.postpolicy##i.hispanic ///
+>     i.stateKY##i.postpolicy##i.otherrace i.year i.statefip [fweight=perwt]
+note: 1.black omitted because of collinearity.
+note: 1.asian omitted because of collinearity.
+note: 1.hispanic omitted because of collinearity.
+note: 1.otherrace omitted because of collinearity.
+note: 2019.year omitted because of collinearity.
+note: 21.statefip omitted because of collinearity.
+
+      Source |       SS           df       MS      Number of obs   = 191638309
+-------------+----------------------------------   F(36,191638272) >  99999.00
+       Model |  6657314.53        36  184925.404   Prob > F        =    0.0000
+    Residual |  40370040.1 191638272  .210657504   R-squared       =    0.1416
+-------------+----------------------------------   Adj R-squared   =    0.1416
+       Total |  47027354.7 191638308   .24539642   Root MSE        =    .45897
+
+----------------------------------------------------------------------------------------------
+                    adhigher | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-----------------------------+----------------------------------------------------------------
+                   1.stateKY |  -.0289615   .0002718  -106.55   0.000    -.0294942   -.0284287
+                1.postpolicy |   .0207112   .0001589   130.35   0.000     .0203997    .0210226
+                             |
+          stateKY#postpolicy |
+                        1 1  |   .0087092   .0002744    31.73   0.000     .0081713    .0092471
+                             |
+                       black |  -.1445962   .0001261 -1147.05   0.000    -.1448433   -.1443491
+                       asian |   .0351088    .000188   186.76   0.000     .0347404    .0354772
+                    hispanic |  -.1918439   .0001675 -1145.54   0.000    -.1921722   -.1915157
+                   otherrace |  -.0913173   .0002034  -448.96   0.000     -.091716   -.0909187
+                      female |    .073018   .0000664  1099.52   0.000     .0728879    .0731482
+                  metrodummy |    .102368   .0001041   983.48   0.000      .102164     .102572
+                     ftotinc |   1.31e-06   3.46e-10  3795.88   0.000     1.31e-06    1.31e-06
+                         age |    -.00444   2.90e-06 -1532.27   0.000    -.0044457   -.0044343
+                     1.black |          0  (omitted)
+                             |
+               stateKY#black |
+                        1 1  |   .0467542   .0005492    85.13   0.000     .0456778    .0478305
+                             |
+            postpolicy#black |
+                        1 1  |  -.0001173   .0001952    -0.60   0.548    -.0004999    .0002652
+                             |
+    stateKY#postpolicy#black |
+                      1 1 1  |  -.0041396    .000862    -4.80   0.000    -.0058291   -.0024501
+                             |
+                     1.asian |          0  (omitted)
+                             |
+               stateKY#asian |
+                        1 1  |    .156243   .0011875   131.58   0.000     .1539156    .1585703
+                             |
+            postpolicy#asian |
+                        1 1  |   -.010097   .0002861   -35.29   0.000    -.0106577   -.0095362
+                             |
+    stateKY#postpolicy#asian |
+                      1 1 1  |  -.0461877   .0017657   -26.16   0.000    -.0496484    -.042727
+                             |
+                  1.hispanic |          0  (omitted)
+                             |
+            stateKY#hispanic |
+                        1 1  |   .0586113   .0009762    60.04   0.000     .0566979    .0605247
+                             |
+         postpolicy#hispanic |
+                        1 1  |   .0085656    .000255    33.59   0.000     .0080658    .0090654
+                             |
+ stateKY#postpolicy#hispanic |
+                      1 1 1  |   -.001139   .0014541    -0.78   0.433    -.0039889     .001711
+                             |
+                 1.otherrace |          0  (omitted)
+                             |
+           stateKY#otherrace |
+                        1 1  |   .0494507    .001145    43.19   0.000     .0472066    .0516948
+                             |
+        postpolicy#otherrace |
+                        1 1  |   .0055093    .000312    17.66   0.000     .0048978    .0061207
+                             |
+stateKY#postpolicy#otherrace |
+                      1 1 1  |  -.0012271   .0017359    -0.71   0.480    -.0046294    .0021752
+                             |
+                        year |
+                       2011  |   .0043397   .0001469    29.55   0.000     .0040519    .0046276
+                       2012  |   .0092902    .000148    62.77   0.000     .0090001    .0095803
+                       2013  |   .0116146   .0001479    78.52   0.000     .0113247    .0119045
+                       2014  |   .0157203   .0001479   106.32   0.000     .0154305    .0160101
+                       2015  |   .0132998   .0001478    89.99   0.000     .0130101    .0135895
+                       2016  |  -.0058851   .0001491   -39.47   0.000    -.0061773   -.0055929
+                       2017  |  -.0040689    .000149   -27.30   0.000     -.004361   -.0037767
+                       2018  |   .0044086   .0001494    29.52   0.000     .0041159    .0047014
+                       2019  |          0  (omitted)
+                             |
+                    statefip |
+                   kentucky  |          0  (omitted)
+                   michigan  |   .0032912     .00022    14.96   0.000     .0028601    .0037224
+                mississippi  |   .0241623   .0002543    95.01   0.000     .0236639    .0246608
+                   nebraska  |   .0734814   .0002726   269.53   0.000      .072947    .0740157
+                   new york  |   .0706911    .000215   328.73   0.000     .0702697    .0711126
+              west virginia  |  -.0646528   .0002933  -220.42   0.000    -.0652277   -.0640779
+                             |
+                       _cons |   .3856141   .0002872  1342.67   0.000     .3850512     .386177
+----------------------------------------------------------------------------------------------
+
+. restore
+
+. 
+. preserve
+
+. drop if statefip == 36  // Remove New York
+(1,027,244 observations deleted)
+
+. reg adhigher i.stateKY##i.postpolicy black asian hispanic otherrace female metrodummy ftotinc age ///
+>     i.stateKY##i.postpolicy##i.black i.stateKY##i.postpolicy##i.asian i.stateKY##i.postpolicy##i.hispanic ///
+>     i.stateKY##i.postpolicy##i.otherrace i.year i.statefip [fweight=perwt]
+note: 1.black omitted because of collinearity.
+note: 1.asian omitted because of collinearity.
+note: 1.hispanic omitted because of collinearity.
+note: 1.otherrace omitted because of collinearity.
+note: 2019.year omitted because of collinearity.
+note: 21.statefip omitted because of collinearity.
+
+      Source |       SS           df       MS      Number of obs   = 295724384
+-------------+----------------------------------   F(36,295724347) >  99999.00
+       Model |  12293381.4        36  341482.816   Prob > F        =    0.0000
+    Residual |  58934256.1 295724347  .199287805   R-squared       =    0.1726
+-------------+----------------------------------   Adj R-squared   =    0.1726
+       Total |  71227637.4 295724383  .240858183   Root MSE        =    .44642
+
+----------------------------------------------------------------------------------------------
+                    adhigher | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-----------------------------+----------------------------------------------------------------
+                   1.stateKY |  -.0754439   .0001728  -436.57   0.000    -.0757826   -.0751052
+                1.postpolicy |   .0111609    .000129    86.51   0.000      .010908    .0114138
+                             |
+          stateKY#postpolicy |
+                        1 1  |   .0143104   .0002641    54.19   0.000     .0137928     .014828
+                             |
+                       black |  -.1201154   .0001283  -935.89   0.000     -.120367   -.1198639
+                       asian |   .0820619   .0001137   722.00   0.000     .0818391    .0822847
+                    hispanic |  -.2753633   .0000951 -2896.60   0.000    -.2755497    -.275177
+                   otherrace |  -.0421496   .0001184  -356.02   0.000    -.0423816   -.0419176
+                      female |   .0499077    .000052   960.35   0.000     .0498058    .0500095
+                  metrodummy |     .09952   .0001002   993.59   0.000     .0993237    .0997163
+                     ftotinc |   1.34e-06   2.85e-10  4688.13   0.000     1.34e-06    1.34e-06
+                         age |  -.0033817   2.29e-06 -1475.38   0.000    -.0033862   -.0033772
+                     1.black |          0  (omitted)
+                             |
+               stateKY#black |
+                        1 1  |   .0254594   .0005357    47.53   0.000     .0244095    .0265093
+                             |
+            postpolicy#black |
+                        1 1  |   .0066602   .0001985    33.55   0.000     .0062711    .0070492
+                             |
+    stateKY#postpolicy#black |
+                      1 1 1  |  -.0109276   .0008404   -13.00   0.000    -.0125749   -.0092804
+                             |
+                     1.asian |          0  (omitted)
+                             |
+               stateKY#asian |
+                        1 1  |   .1148422   .0011462   100.20   0.000     .1125957    .1170886
+                             |
+            postpolicy#asian |
+                        1 1  |  -.0000878   .0001714    -0.51   0.609    -.0004237    .0002482
+                             |
+    stateKY#postpolicy#asian |
+                      1 1 1  |  -.0564987   .0017033   -33.17   0.000    -.0598372   -.0531602
+                             |
+                  1.hispanic |          0  (omitted)
+                             |
+            stateKY#hispanic |
+                        1 1  |   .1471146   .0009403   156.45   0.000     .1452717    .1489576
+                             |
+         postpolicy#hispanic |
+                        1 1  |   .0065694   .0001422    46.21   0.000     .0062908    .0068481
+                             |
+ stateKY#postpolicy#hispanic |
+                      1 1 1  |   .0001991   .0013996     0.14   0.887     -.002544    .0029423
+                             |
+                 1.otherrace |          0  (omitted)
+                             |
+           stateKY#otherrace |
+                        1 1  |    .003502   .0011024     3.18   0.001     .0013415    .0056626
+                             |
+        postpolicy#otherrace |
+                        1 1  |  -.0016931     .00018    -9.41   0.000    -.0020459   -.0013403
+                             |
+stateKY#postpolicy#otherrace |
+                      1 1 1  |   .0066864   .0016706     4.00   0.000     .0034121    .0099608
+                             |
+                        year |
+                       2011  |   .0017729   .0001174    15.10   0.000     .0015427     .002003
+                       2012  |   .0064234   .0001174    54.73   0.000     .0061934    .0066534
+                       2013  |   .0048503   .0001172    41.38   0.000     .0046205      .00508
+                       2014  |   .0069482    .000117    59.41   0.000     .0067189    .0071774
+                       2015  |   .0074893   .0001168    64.14   0.000     .0072604    .0077181
+                       2016  |  -.0052749   .0001155   -45.67   0.000    -.0055013   -.0050485
+                       2017  |  -.0027883   .0001152   -24.19   0.000    -.0030142   -.0025625
+                       2018  |   .0004482   .0001152     3.89   0.000     .0002224    .0006741
+                       2019  |          0  (omitted)
+                             |
+                    statefip |
+                   delaware  |  -.0459655   .0002077  -221.28   0.000    -.0463726   -.0455583
+                   kentucky  |          0  (omitted)
+                   michigan  |  -.0436773   .0000775  -563.44   0.000    -.0438293   -.0435254
+                mississippi  |   -.029265   .0001488  -196.70   0.000    -.0295566   -.0289734
+                   nebraska  |   .0328129   .0001741   188.50   0.000     .0324717     .033154
+              west virginia  |  -.1104857    .000204  -541.55   0.000    -.1108856   -.1100859
+                             |
+                       _cons |   .4004793   .0001715  2335.24   0.000     .4001432    .4008154
+----------------------------------------------------------------------------------------------
+
+. restore
+
+. 
+. preserve
+
+. drop if statefip == 06 | statefip == 36  // Remove Both California and New York
+(2,996,962 observations deleted)
+
+. reg adhigher i.stateKY##i.postpolicy black asian hispanic otherrace female metrodummy ftotinc age ///
+>     i.stateKY##i.postpolicy##i.black i.stateKY##i.postpolicy##i.asian i.stateKY##i.postpolicy##i.hispanic ///
+>     i.stateKY##i.postpolicy##i.otherrace i.year i.statefip [fweight=perwt]
+note: 1.black omitted because of collinearity.
+note: 1.asian omitted because of collinearity.
+note: 1.hispanic omitted because of collinearity.
+note: 1.otherrace omitted because of collinearity.
+note: 2019.year omitted because of collinearity.
+note: 21.statefip omitted because of collinearity.
+
+      Source |       SS           df       MS      Number of obs   =  93258230
+-------------+----------------------------------   F(35, 93258194) >  99999.00
+       Model |  2954127.93        35  84403.6552   Prob > F        =    0.0000
+    Residual |  19104778.7  93258194  .204858982   R-squared       =    0.1339
+-------------+----------------------------------   Adj R-squared   =    0.1339
+       Total |  22058906.6  93258229  .236535766   Root MSE        =    .45261
+
+----------------------------------------------------------------------------------------------
+                    adhigher | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-----------------------------+----------------------------------------------------------------
+                   1.stateKY |  -.0070233    .000273   -25.72   0.000    -.0075585   -.0064882
+                1.postpolicy |   .0079703   .0002232    35.71   0.000     .0075328    .0084077
+                             |
+          stateKY#postpolicy |
+                        1 1  |   .0092148   .0002835    32.50   0.000     .0086592    .0097705
+                             |
+                       black |   -.101654   .0001855  -547.93   0.000    -.1020176   -.1012904
+                       asian |    .190079   .0004219   450.54   0.000     .1892521    .1909059
+                    hispanic |  -.1546279   .0003547  -435.88   0.000    -.1553232   -.1539326
+                   otherrace |  -.0473953   .0004148  -114.26   0.000    -.0482083   -.0465823
+                      female |   .0749285   .0000939   798.32   0.000     .0747446    .0751125
+                  metrodummy |   .0846645   .0001154   733.92   0.000     .0844384    .0848906
+                     ftotinc |   1.92e-06   6.47e-10  2960.40   0.000     1.91e-06    1.92e-06
+                         age |  -.0034115   4.11e-06  -830.11   0.000    -.0034196   -.0034035
+                     1.black |          0  (omitted)
+                             |
+               stateKY#black |
+                        1 1  |   .0236578   .0005585    42.36   0.000     .0225632    .0247525
+                             |
+            postpolicy#black |
+                        1 1  |  -.0005832   .0002844    -2.05   0.040    -.0011406   -.0000258
+                             |
+    stateKY#postpolicy#black |
+                      1 1 1  |   -.000023   .0008755    -0.03   0.979    -.0017389    .0016929
+                             |
+                     1.asian |          0  (omitted)
+                             |
+               stateKY#asian |
+                        1 1  |  -.0020654   .0012304    -1.68   0.093     -.004477    .0003462
+                             |
+            postpolicy#asian |
+                        1 1  |  -.0105814   .0006288   -16.83   0.000    -.0118139    -.009349
+                             |
+    stateKY#postpolicy#asian |
+                      1 1 1  |  -.0426814   .0018297   -23.33   0.000    -.0462675   -.0390953
+                             |
+                  1.hispanic |          0  (omitted)
+                             |
+            stateKY#hispanic |
+                        1 1  |    .041868   .0010125    41.35   0.000     .0398836    .0438524
+                             |
+         postpolicy#hispanic |
+                        1 1  |  -.0063069   .0005365   -11.76   0.000    -.0073585   -.0052554
+                             |
+ stateKY#postpolicy#hispanic |
+                      1 1 1  |   .0098118   .0015102     6.50   0.000     .0068519    .0127718
+                             |
+                 1.otherrace |          0  (omitted)
+                             |
+           stateKY#otherrace |
+                        1 1  |   .0175342    .001186    14.78   0.000     .0152096    .0198588
+                             |
+        postpolicy#otherrace |
+                        1 1  |   .0201598   .0006266    32.17   0.000     .0189316    .0213879
+                             |
+stateKY#postpolicy#otherrace |
+                      1 1 1  |  -.0149017   .0017968    -8.29   0.000    -.0184233   -.0113801
+                             |
+                        year |
+                       2011  |   .0004037   .0002083     1.94   0.053    -4.49e-06    .0008119
+                       2012  |   .0040983   .0002093    19.58   0.000     .0036881    .0045085
+                       2013  |   .0075408   .0002094    36.02   0.000     .0071305    .0079512
+                       2014  |    .008238   .0002094    39.33   0.000     .0078275    .0086485
+                       2015  |   .0076858   .0002095    36.69   0.000     .0072753    .0080964
+                       2016  |  -.0035467   .0002104   -16.85   0.000    -.0039592   -.0031343
+                       2017  |  -.0023424   .0002104   -11.13   0.000    -.0027548     -.00193
+                       2018  |   .0058958   .0002104    28.02   0.000     .0054833    .0063083
+                       2019  |          0  (omitted)
+                             |
+                    statefip |
+                   kentucky  |          0  (omitted)
+                   michigan  |   .0139591   .0002175    64.19   0.000     .0135328    .0143854
+                mississippi  |   .0308538   .0002534   121.78   0.000     .0303572    .0313504
+                   nebraska  |   .0834036   .0002697   309.29   0.000     .0828751    .0839322
+              west virginia  |   -.042965   .0002921  -147.07   0.000    -.0435376   -.0423924
+                             |
+                       _cons |   .2879414   .0003376   853.00   0.000     .2872798     .288603
+----------------------------------------------------------------------------------------------
+
+. restore
+
+. // Interpretation: The DiD coefficient remains positive and statistically significant in all cases, ranging from ~0
+> .0087 to ~0.014.
+. log close
+      name:  <unnamed>
+       log:  G:\My Drive\ky attainment\KY Attainment Log.log
+  log type:  text
+ closed on:   7 Jan 2025, 16:57:53
+---------------------------------------------------------------------------------------------------------------------
